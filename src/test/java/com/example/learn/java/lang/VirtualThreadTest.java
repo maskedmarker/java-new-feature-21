@@ -9,6 +9,8 @@ public class VirtualThreadTest {
         test0();
         System.out.println("-------------------------------------------------");
         test1();
+        System.out.println("-------------------------------------------------");
+        test2();
     }
 
 
@@ -40,6 +42,28 @@ public class VirtualThreadTest {
         final Thread[] threads = new Thread[3];
 
         Thread virtualThread = Thread.startVirtualThread(() -> {
+            threads[1] = Thread.currentThread();
+            threads[2] = currentCarrierThread(threads[1]);
+        });
+        threads[0] = virtualThread;
+
+        // startVirtualThread返回的是虚拟线程对象
+        System.out.println("virtualThread.getClass() = " + virtualThread.getClass());
+
+        // 等待newThread结束
+        virtualThread.join();
+        System.out.println("virtualThread == currentThread ? " + (threads[0] == threads[1]));
+        System.out.println("virtualThread == currentCarrierThread ? " + (threads[0] == threads[2]));
+    }
+
+    /**
+     * 创建虚拟线的另一个方法
+     */
+    private static void test2() throws InterruptedException {
+        final Thread[] threads = new Thread[3];
+
+        // ofVirtual采用了builder模式来构造虚拟线程
+        Thread virtualThread = Thread.ofVirtual().name("vt").start(() -> {
             threads[1] = Thread.currentThread();
             threads[2] = currentCarrierThread(threads[1]);
         });

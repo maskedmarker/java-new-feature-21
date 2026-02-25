@@ -175,7 +175,7 @@ public final class NioSocketImpl extends SocketImpl implements PlatformSocketImp
                 // read, no timeout
                 n = tryRead(fd, b, off, len);
                 while (IOStatus.okayToRetry(n) && isOpen()) {
-                    park(fd, Net.POLLIN);                            // 💯💯💯 向Poller注册当前fd的接收到数据的事件,当fd有新的数据后才退出该park方法
+                    park(fd, Net.POLLIN);                                            // 💯💯💯 向Poller注册当前fd的接收到数据的事件,当fd有新的数据后才退出该park方法
                     n = tryRead(fd, b, off, len);
                 }
             }
@@ -190,6 +190,35 @@ public final class NioSocketImpl extends SocketImpl implements PlatformSocketImp
             throw asSocketException(ioe);
         } finally {
             endRead(n > 0);
+        }
+    }
+    
+    // Disables the current thread for scheduling purposes until the socket is ready for I/ O or is asynchronously closed.
+    private void park(FileDescriptor fd, int event) throws IOException {
+        park(fd, event, 0);
+    }
+    
+    // Disables the current thread for scheduling purposes until the socket is ready for I/ O or is asynchronously closed, for up to the specified waiting time.
+    private void park(FileDescriptor fd, int event, long nanos) throws IOException {
+        Thread t = Thread.currentThread();
+        if (t.isVirtual()) {                                                             // 💯💯💯 区分虚拟线程和平台线程
+            Poller.poll(fdVal(fd), event, nanos, this::isOpen);
+            if (t.isInterrupted()) {
+                throw new InterruptedIOException();
+            }
+        } else {
+            long millis;
+            if (nanos == 0) {
+                millis = -1;
+            } else {
+                millis = NANOSECONDS.toMillis(nanos);
+                if (nanos > MILLISECONDS.toNanos(millis)) {
+                    // Round up any excess nanos to the nearest millisecond to
+                    // avoid parking for less than requested.
+                    millis++;
+                }
+            }
+            Net.poll(fd, event, millis);                                               // Polls a file descriptor for events. timeout – the timeout to wait; 0 to not wait, -1 to wait indefinitely
         }
     }    
 }

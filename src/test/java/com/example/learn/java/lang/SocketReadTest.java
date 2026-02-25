@@ -25,17 +25,18 @@ public class SocketReadTest {
 
 
         // Creates a stream socket and connects it to the specified port number at the specified IP address
-        Socket socket = new Socket(InetAddress.getByName(host), port);
-        try (InputStream inputStream = socket.getInputStream(); OutputStream outputStream = socket.getOutputStream()) {
+        try (Socket socket = new Socket(InetAddress.getByName(host), port); InputStream inputStream = socket.getInputStream(); OutputStream outputStream = socket.getOutputStream()) {
             // 发送请求
             outputStream.write(httpRequest.getBytes(StandardCharsets.UTF_8));
 
             // 接收请求
             byte[] buffer = new byte[1024];
             int nRead;
-            while ((nRead = inputStream.read(buffer)) > 0 ) {
-                String content = new String(buffer, 0, nRead, StandardCharsets.UTF_8);
-                System.out.print(content);
+            while ((nRead = inputStream.read(buffer)) != -1) {
+                if (nRead > 0) {
+                    String content = new String(buffer, 0, nRead, StandardCharsets.UTF_8);
+                    System.out.print(content);
+                }
             }
         }
     }
