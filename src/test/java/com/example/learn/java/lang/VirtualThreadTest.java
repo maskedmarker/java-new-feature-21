@@ -2,7 +2,14 @@ package com.example.learn.java.lang;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.Timer;
+import java.util.concurrent.TimeUnit;
 
+/**
+ * 虚拟线程适用于执行阻塞式任务,在阻塞期间,可以将CPU资源让渡给其他任务
+ * 虚拟线程不适合CPU密集计算或非阻塞任务,虚拟线程并不会运行的更快
+ * 虚拟线程是轻量级资源,用完即抛,不需要池化
+ */
 public class VirtualThreadTest {
 
     public static void main(String[] args) throws Exception {
@@ -10,7 +17,7 @@ public class VirtualThreadTest {
         System.out.println("-------------------------------------------------");
         test1();
         System.out.println("-------------------------------------------------");
-        test2();
+//        test2();
     }
 
 
