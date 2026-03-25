@@ -150,7 +150,11 @@ private void submitRunContinuation() {
 ```
 
 
-## VirtualThread.park
+## park
+
+不管是VirtualThread还是Thread类,在使用park时,都是当前"(虚拟)线程"自己主动调用LockSupport.park(),而非其他线程调用另一个线程.  🎯🎯🎯🎯🎯🎯
+都是处于某种条件下,当前线程觉得自己需要先暂时挂起自己,等待条件满足后,被其他线程LockSupport.unpark().🎯🎯🎯🎯🎯🎯
+
 
 ```text
 void park() {
@@ -199,6 +203,9 @@ getAndSetParkPermit(true)返回false: 即parkPermit由false->true.
 getAndSetParkPermit(false)返回false: 即permit本来就是false.
 getAndSetParkPermit(true)返回true: 即permit本来就是true.
 ```
+
+这里的 unmount（Java层） ≠ JVM 的栈卸载（C++层）, Java 这里只是“状态同步”.
+
 
 Unmounts this virtual thread, invokes Continuation. yield, and re-mounts the thread when continued. When enabled, JVMTI must be notified from this method.
 ```text
@@ -261,7 +268,7 @@ private void mount() {
 
 
 
-## VirtualThread.unpark
+## unpark
 
 ```text
 @ChangesCurrentThread
@@ -305,6 +312,44 @@ private void submitRunContinuation() {
 }
 ```
 
+
+## parkNanos
+
+```text
+void parkNanos(long nanos) {
+    assert Thread.currentThread() == this;
+
+    // complete immediately if parking permit available or interrupted
+    if (getAndSetParkPermit(false) || interrupted)
+        return;
+
+    // park the thread for the waiting time
+    if (nanos > 0) {
+        long startTime = System.nanoTime();
+
+        boolean yielded = false;
+        Future<?> unparker = scheduleUnpark(this::unpark, nanos);                       // 🎯🎯🎯通过向定时任务线程池(不是任务执行的线程池)提交定时任务,由定时任务执行unpark操作(然后当前虚拟线程暂停执行)
+        setState(PARKING);
+        try {
+            yielded = yieldContinuation();  // may throw
+        } finally {
+            assert (Thread.currentThread() == this) && (yielded == (state() == RUNNING));
+            if (!yielded) {
+                assert state() == PARKING;
+                setState(RUNNING);
+            }
+            cancel(unparker);
+        }
+
+        // park on carrier thread for remaining time when pinned
+        if (!yielded) {
+            long remainingNanos = nanos - (System.nanoTime() - startTime);
+            parkOnCarrierThread(true, remainingNanos);
+        }
+    }
+}
+```
+
 ## runContinuation
 
 runContinuation不仅在start时会被调用,在unpark后也会被调用.
@@ -338,6 +383,36 @@ private void runContinuation() {
             afterTerminate();
         } else {
             afterYield();
+        }
+    }
+}
+```
+
+
+## sleep
+
+```text
+void sleepNanos(long nanos) throws InterruptedException {
+    assert Thread.currentThread() == this && nanos >= 0;
+    if (getAndClearInterrupt())
+        throw new InterruptedException();
+    if (nanos == 0) {
+        tryYield();
+    } else {
+        // park for the sleep time
+        try {
+            long remainingNanos = nanos;
+            long startNanos = System.nanoTime();
+            while (remainingNanos > 0) {
+                parkNanos(remainingNanos);
+                if (getAndClearInterrupt()) {
+                    throw new InterruptedException();
+                }
+                remainingNanos = nanos - (System.nanoTime() - startNanos);
+            }
+        } finally {
+            // may have been unparked while sleeping
+            setParkPermit(true);
         }
     }
 }

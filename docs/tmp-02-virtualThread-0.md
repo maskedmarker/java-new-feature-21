@@ -2,6 +2,22 @@
 
 
 ```text
+Thread.startVirtualThread(r)
+    ↓
+VirtualThread.start()
+    ↓
+submitRunContinuation()
+    ↓
+ForkJoinPool.execute(runContinuation)
+    ↓
+runContinuation.run()
+    ↓
+Continuation.run()
+    ↓
+JVM_ContinuationEnter   （进入 JVM）
+```
+
+```text
 public static Thread startVirtualThread(Runnable task) {
     Objects.requireNonNull(task);
     var thread = ThreadBuilders.newVirtualThread(null, null, 0, task);

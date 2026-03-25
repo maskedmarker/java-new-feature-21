@@ -71,7 +71,7 @@ public final void run() {
                 if (parent != null)
                     parent.child = null;
 
-                postYieldCleanup();
+                postYieldCleanup();                                                             // yield会导致本执行片结束(即从enterSpecial返回)
 
                 unmount();
                 if (PRESERVE_SCOPED_VALUE_CACHE) {
@@ -84,12 +84,14 @@ public final void run() {
         }
         // we're now in the parent continuation
 
+        // 到达这里有2种情况: 任务执行完了;yield结束了本执行片
+        
         assert yieldInfo == null || yieldInfo instanceof ContinuationScope;
-        if (yieldInfo == null || yieldInfo == scope) {
+        if (yieldInfo == null || yieldInfo == scope) {                                            // 这是在多次执行片后,任务执行完毕
             this.parent = null;
             this.yieldInfo = null;
             return;
-        } else {
+        } else {                                                                                  // yield传播链 = 每一层continuation依次执行“保存栈 + 退出”,直到命中目标 scope
             parent.child = this;
             parent.yield0((ContinuationScope)yieldInfo, this);
             parent.child = null;
@@ -165,6 +167,10 @@ private static native int doYield();
 在实际实现中：
 区分是否真正 yield
 是否被pin不能挂起）
+
+
+doYield导致continuation的本次执行片结束(即enterSpecial执行完从方法返回)🎯🎯🎯🎯
+即在enterSpecial执行target.run时,run中触发了yield,yield保存好当前栈信息,然后返回到enterSpecial的方法出口.
 ```
 
 ```text
@@ -292,6 +298,23 @@ user continuation
 
 
 ## enterSpecial
+
+
+```text
+enterSpecial 会在当前 continuation “本轮执行结束”时返回
+
+而“本轮执行结束”有且只有三种情况：
+1️⃣ continuation 执行完（run 方法结束）
+2️⃣ 调用了 yield（主动挂起）
+3️⃣ 抛出异常（未被内部捕获）
+
+一旦发生 yield,这一轮 enterSpecial 就结束了.
+但注意：不是线程结束！只是一次“执行时间片”结束. 🔥🔥🔥
+
+enterSpecial的执行周期: 从continuation恢复开始,到“遇到 yield / 执行结束 / 异常”为止
+```
+
+
 
 
 ```text
